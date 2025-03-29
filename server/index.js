@@ -10,13 +10,22 @@ const db = createClient({
   url: 'file:database.sqlite',
 });
 
-// Configure CORS with specific options
+// Configure CORS with expanded options
 app.use(cors({
-  origin: ['http://localhost:5173', 'https://localhost:5173'], // Allow both http and https
+  origin: [
+    'http://localhost:5173',
+    'https://localhost:5173',
+    'http://127.0.0.1:7860',
+    'http://127.0.0.1:5173'
+  ],
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+  credentials: true,
+  preflightContinue: true
 }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 app.use(express.json());
 
@@ -72,6 +81,29 @@ app.get('/api/user-data', async (req, res) => {
   } catch (error) {
     console.error('Error fetching user data:', error);
     res.status(500).json({ error: 'Failed to fetch user data' });
+  }
+});
+
+// Proxy endpoint for the AI API
+app.post('/api/proxy/ai', async (req, res) => {
+  try {
+    const response = await fetch(
+      "http://127.0.0.1:7860/api/v1/run/a4750c39-3fb9-4115-9316-c7815f68a43c?stream=false",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "sk-0xIidlrOXVmV_vH1NtsDqLWWUQO-GOiz7izCCYGsmN0"
+        },
+        body: JSON.stringify(req.body)
+      }
+    );
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Error calling AI API:', error);
+    res.status(500).json({ error: 'Failed to process AI request' });
   }
 });
 

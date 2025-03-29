@@ -42,6 +42,10 @@ function App() {
   }, []);
 
   const saveUserData = async (data: UserData) => {
+    if (!data.budget || !data.city || !data.investmentType || !data.targetAudience) {
+      return null;
+    }
+
     try {
       // Save to local database
       const dbResponse = await fetch('http://localhost:3000/api/user-data', {
@@ -54,61 +58,63 @@ function App() {
           city: data.city,
           investmentType: data.investmentType,
           targetAudience: data.targetAudience
-        }),
-        credentials: 'include'
+        })
       });
       
       if (!dbResponse.ok) {
         throw new Error('Failed to save user data');
       }
 
-      // If we have all the data, make the API call
-      if (data.budget && data.city && data.investmentType && data.targetAudience) {
-        const inputValue = `Orçamento: ${data.budget}, Cidade: ${data.city}, Tipo de Investimento: ${data.investmentType}, Público Alvo: ${data.targetAudience}`;
-        
-        const apiResponse = await fetch(
-          "http://127.0.0.1:7860/api/v1/run/a4750c39-3fb9-4115-9316-c7815f68a43c?stream=false",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": "sk-0xIidlrOXVmV_vH1NtsDqLWWUQO-GOiz7izCCYGsmN0"
-            },
-            body: JSON.stringify({
-              input_value: inputValue,
-              output_type: "text",
-              input_type: "text",
-              tweaks: {
-                "Chroma-Id7kU": {},
-                "NVIDIAEmbeddingsComponent-RAq12": {},
-                "Agent-wpEkC": {},
-                "TextInput-rBrQN": {},
-                "TextOutput-fA4Ef": {},
-                "PythonFunction-Nf6Sv": {},
-                "PythonFunction-P3Je4": {},
-                "Webhook-JW4lJ": {}
-              }
-            })
-          }
-        );
+      const savedData = await dbResponse.json();
 
-        const apiData = await apiResponse.json();
-        
-        // Add API response to chat
-        const apiResponseMessage: Message = {
-          id: Date.now().toString(),
-          content: typeof apiData === 'string' ? apiData : JSON.stringify(apiData, null, 2),
-          role: 'assistant',
-          timestamp: new Date(),
-        };
-
-        setChatState(prev => ({
-          ...prev,
-          messages: [...prev.messages, apiResponseMessage],
-        }));
-      }
+      // Make the API call through our proxy
+      const inputValue = `Orçamento: ${data.budget}, Cidade: ${data.city}, Tipo de Investimento: ${data.investmentType}, Público Alvo: ${data.targetAudience}`;
       
-      return await dbResponse.json();
+      const apiResponse = await fetch(
+        "http://localhost:3000/api/proxy/ai",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            input_value: inputValue,
+            output_type: "text",
+            input_type: "text",
+            tweaks: {
+              "Chroma-Id7kU": {},
+              "NVIDIAEmbeddingsComponent-RAq12": {},
+              "Agent-wpEkC": {},
+              "TextInput-rBrQN": {},
+              "TextOutput-fA4Ef": {},
+              "PythonFunction-Nf6Sv": {},
+              "PythonFunction-P3Je4": {},
+              "Webhook-JW4lJ": {}
+            }
+          })
+        }
+      );
+
+      if (!apiResponse.ok) {
+        throw new Error('Failed to get AI response');
+      }
+
+      const apiData = await apiResponse.json();
+      
+      // Add API response to chat
+      const apiResponseMessage: Message = {
+        id: Date.now().toString(),
+        content: typeof apiData === 'string' ? apiData : JSON.stringify(apiData, null, 2),
+        role: 'assistant',
+        timestamp: new Date(),
+      };
+
+      setChatState(prev => ({
+        ...prev,
+        messages: [...prev.messages, apiResponseMessage],
+      }));
+      
+      return savedData;
     } catch (error) {
       console.error('Error processing data:', error);
       throw error;
@@ -167,9 +173,20 @@ function App() {
           newUserData = prev;
         }
 
+        // Only save if we have all the data
         if (newUserData.budget && newUserData.city && newUserData.investmentType && newUserData.targetAudience) {
-          console.log('Saving user data:', newUserData);
-          saveUserData(newUserData).catch(console.error);
+          saveUserData(newUserData).catch(error => {
+            console.error('Failed to save data:', error);
+            setChatState(prev => ({
+              ...prev,
+              messages: [...prev.messages, {
+                id: Date.now().toString(),
+                content: 'Desculpe, ocorreu um erro ao processar suas informações. Por favor, tente novamente.',
+                role: 'assistant',
+                timestamp: new Date(),
+              }],
+            }));
+          });
         }
 
         return newUserData;
