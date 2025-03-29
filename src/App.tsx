@@ -168,6 +168,7 @@ function App() {
         }
 
         if (newUserData.budget && newUserData.city && newUserData.investmentType && newUserData.targetAudience) {
+          console.log('Saving user data:', newUserData);
           saveUserData(newUserData).catch(console.error);
         }
 
