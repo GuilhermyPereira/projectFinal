@@ -34,12 +34,12 @@ async function initializeDatabase() {
   try {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS user_data (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        budget REAL NOT NULL,
-        city TEXT NOT NULL,
-        investment_type TEXT NOT NULL,
-        target_audience TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      budget REAL NOT NULL,
+      city TEXT NOT NULL,
+      investment_type TEXT NOT NULL,
+      target_audience TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT (datetime('now', 'localtime', '-3 hours'))
       );
     `);
     console.log('Database initialized successfully');
