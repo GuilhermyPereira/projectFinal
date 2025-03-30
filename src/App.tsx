@@ -208,40 +208,47 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <div className="max-w-3xl mx-auto p-4">
-        <div className="bg-gray-800 rounded-t-lg p-4 border-b border-gray-700 flex items-center gap-2">
-          <div className="bg-blue-500 p-2 rounded-full">
-            <MessageSquareCode className="text-white" size={24} />
+    <div 
+      className="min-h-screen bg-cover bg-center bg-no-repeat relative"
+      style={{
+      backgroundImage: `url('/media/background.jpg')`,
+      }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-b from-gray-900/70 to-gray-900/90 backdrop-blur-[2px]" />
+      <div className="relative max-w-3xl mx-auto p-4">
+      <div className="bg-gray-800/80 backdrop-blur-sm rounded-t-lg p-4 border-b border-gray-700 flex items-center gap-2">
+        <div className="bg-blue-500 p-2 rounded-full">
+        <MessageSquareCode className="text-white" size={24} />
+        </div>
+        <h1 className="text-xl font-semibold text-white">LocalAItycs Assistant</h1>
+      </div>
+      <div className="bg-gray-800/80 backdrop-blur-sm h-[600px] overflow-y-auto p-4 flex flex-col gap-4">
+        {chatState.messages.length === 0 ? (
+        <div className="text-center text-gray-400 mt-8">
+          Envie uma mensagem para iniciar a conversa
+        </div>
+        ) : (
+        chatState.messages.map((message, index) => (
+          <div
+          key={message.id}
+          className="message-appear"
+          style={{ animationDelay: `${index * 0.2}s` }}
+          >
+          <ChatMessage message={message} />
           </div>
-          <h1 className="text-xl font-semibold text-white">LocalAItycs Assistant</h1>
-        </div>
-        <div className="bg-gray-800 h-[600px] overflow-y-auto p-4 flex flex-col gap-4">
-          {chatState.messages.length === 0 ? (
-            <div className="text-center text-gray-400 mt-8">
-              Envie uma mensagem para iniciar a conversa
-            </div>
-          ) : (
-            chatState.messages.map((message, index) => (
-              <div
-                key={message.id}
-                className="message-appear"
-                style={{ animationDelay: `${index * 0.2}s` }}
-              >
-                <ChatMessage message={message} />
-              </div>
-            ))
-          )}
-        </div>
-        <div className="bg-gray-800 rounded-b-lg p-4 border-t border-gray-700">
-          <ChatInput
-            onSendMessage={sendMessage}
-            disabled={chatState.isLoading}
-          />
-        </div>
+        ))
+        )}
+      </div>
+      <div className="bg-gray-800/80 backdrop-blur-sm rounded-b-lg p-4 border-t border-gray-700">
+        <ChatInput
+        onSendMessage={sendMessage}
+        disabled={chatState.isLoading}
+        />
+      </div>
       </div>
     </div>
   );
 }
+
 
 export default App;
