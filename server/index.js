@@ -121,23 +121,83 @@ const startServer = async () => {
     // Proxy endpoint for the AI API
     app.post('/api/proxy/ai', async (req, res) => {
       try {
+        const { budget, city, investmentType, targetAudience } = req.body;
+        
+        console.log('Received request data:', {
+          budget,
+          city,
+          investmentType,
+          targetAudience
+        });
+
+        // Prepare the prompt for the AI
+        const prompt = `Analise as seguintes informações para um novo negócio:
+- Orçamento: R$ ${budget}
+- Cidade: ${city}
+- Tipo de Negócio: ${investmentType}
+- Público-alvo: ${targetAudience}
+
+Por favor, forneça recomendações detalhadas sobre a melhor localização para este negócio, considerando:
+1. Áreas específicas da cidade que melhor atendem ao público-alvo
+2. Análise do fluxo de pessoas e acessibilidade
+3. Proximidade com estabelecimentos complementares
+4. Considerações sobre o orçamento disponível
+5. Potencial de crescimento da região`;
+
+        // First, check if the AI service is available
+        try {
+          await fetch('http://127.0.0.1:7860/health-check');
+        } catch (error) {
+          throw new Error('AI service is not available. Please ensure the service is running.');
+        }
+
         const response = await fetch(
-          "http://127.0.0.1:7860/api/v1/run/a4750c39-3fb9-4115-9316-c7815f68a43c?stream=false",
+          "http://127.0.0.1:7860/api/v1/predict",
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               "x-api-key": "sk-0xIidlrOXVmV_vH1NtsDqLWWUQO-GOiz7izCCYGsmN0"
             },
-            body: JSON.stringify(req.body)
+            body: JSON.stringify({
+              input: {
+                prompt: prompt
+              }
+            })
           }
         );
 
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('AI API error response:', errorText);
+          throw new Error(`AI API responded with status: ${response.status}`);
+        }
+
         const data = await response.json();
-        res.json(data);
+        console.log('AI API response:', data);
+
+        // Handle different possible response formats
+        let message;
+        if (data.data && Array.isArray(data.data)) {
+          message = data.data[0];
+        } else if (data.output) {
+          message = data.output;
+        } else if (data.response) {
+          message = data.response;
+        } else if (typeof data === 'string') {
+          message = data;
+        } else {
+          throw new Error('Unexpected response format from AI API');
+        }
+
+        res.json({ message });
       } catch (error) {
         console.error('Error calling AI API:', error);
-        res.status(500).json({ error: 'Failed to process AI request' });
+        res.status(500).json({ 
+          error: 'Failed to process AI request', 
+          details: error.message,
+          timestamp: new Date().toISOString()
+        });
       }
     });
 

@@ -20,7 +20,7 @@ function App() {
 
   useEffect(() => {
     if (!initialized) {
-      setInitialized(true); // Evita reexecução
+      setInitialized(true);
 
       const initialMessages: Message[] = [
         {
@@ -44,6 +44,69 @@ function App() {
     }
   }, [initialized]);
 
+  const saveUserData = async (completeUserData: UserData) => {
+    try {
+      const response = await fetch('http://localhost:3000/api/user-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          budget: completeUserData.budget,
+          city: completeUserData.city,
+          investmentType: completeUserData.investmentType,
+          targetAudience: completeUserData.targetAudience,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save user data');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error saving user data:', error);
+      throw error;
+    }
+  };
+
+  const callAIApi = async (completeUserData: UserData) => {
+    try {
+      console.log('Calling AI API with data:', completeUserData);
+      
+      const response = await fetch('http://localhost:3000/api/proxy/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          budget: completeUserData.budget,
+          city: completeUserData.city,
+          investmentType: completeUserData.investmentType,
+          targetAudience: completeUserData.targetAudience,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('AI API error response:', errorText);
+        throw new Error('Failed to get AI response');
+      }
+
+      const data = await response.json();
+      console.log('AI API response:', data);
+
+      if (!data || !data.message) {
+        throw new Error('Invalid response format from AI API');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error calling AI API:', error);
+      throw error;
+    }
+  };
+
   const sendMessage = async (content: string) => {
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -59,42 +122,99 @@ function App() {
     }));
 
     let responseMessage = '';
+    let updatedUserData = { ...userData };
 
-    if (userData.budget === null) {
-      const budgetValue = content.trim().match(/^\d+(\.\d+)?$/) ? parseFloat(content) : NaN;
+    try {
+      if (userData.budget === null) {
+        const budgetValue = content.trim().match(/^\d+(\.\d+)?$/) ? parseFloat(content) : NaN;
 
-      if (isNaN(budgetValue) || budgetValue <= 0) {
-        responseMessage = 'Por favor, insira um valor numérico válido para o orçamento.';
-      } else {
-        setUserData(prev => ({ ...prev, budget: budgetValue }));
-        responseMessage = 'Em qual cidade seu negócio será localizado?';
+        if (isNaN(budgetValue) || budgetValue <= 0) {
+          responseMessage = 'Por favor, insira um valor numérico válido para o orçamento.';
+        } else {
+          updatedUserData = { ...updatedUserData, budget: budgetValue };
+          responseMessage = 'Em qual cidade seu negócio será localizado?';
+        }
+      } else if (userData.city === null) {
+        updatedUserData = { ...updatedUserData, city: content.trim() };
+        responseMessage = 'Obrigado! Agora, qual o tipo de investimento? Exemplo: Sorveteria, Escola de idiomas, Lanchonete, etc.';
+      } else if (userData.investmentType === null) {
+        updatedUserData = { ...updatedUserData, investmentType: content.trim() };
+        responseMessage = 'Ótimo! Agora, qual será o público-alvo do seu negócio? Exemplo: Jovens universitários, famílias, profissionais liberais, etc.';
+      } else if (userData.targetAudience === null) {
+        updatedUserData = { ...updatedUserData, targetAudience: content.trim() };
+        
+        // Save data and call AI API when all data is collected
+        const savedData = await saveUserData(updatedUserData);
+        console.log('Data saved successfully:', savedData);
+        
+        responseMessage = 'Perfeito! Processando suas informações para encontrar as melhores opções para seu negócio...';
+        
+        // Add processing message
+        const processingMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: responseMessage,
+          role: 'assistant',
+          timestamp: new Date(),
+        };
+        
+        setChatState(prev => ({
+          ...prev,
+          messages: [...prev.messages, processingMessage],
+        }));
+        
+        // Call AI API
+        const aiResponse = await callAIApi(updatedUserData);
+        
+        // Add AI response to chat
+        if (aiResponse && aiResponse.message) {
+          const aiMessage: Message = {
+            id: (Date.now() + 2).toString(),
+            content: aiResponse.message,
+            role: 'assistant',
+            timestamp: new Date(),
+          };
+          
+          setChatState(prev => ({
+            ...prev,
+            messages: [...prev.messages, aiMessage],
+            isLoading: false,
+          }));
+          
+          // Early return since we've already handled the state updates
+          setUserData(updatedUserData);
+          return;
+        }
       }
-    } else if (userData.city === null) {
-      setUserData(prev => ({ ...prev, city: content.trim() }));
-      responseMessage = 'Obrigado! Agora, qual o tipo de investimento? Exemplo: Sorveteria, Escola de idiomas, Lanchonete, etc.';
-    } else if (userData.investmentType === null) {
-      setUserData(prev => ({ ...prev, investmentType: content.trim() }));
-      responseMessage = 'Ótimo! Agora, qual será o público-alvo do seu negócio? Exemplo: Jovens universitários, famílias, profissionais liberais, etc.';
-    } else if (userData.targetAudience === null) {
-      setUserData(prev => ({ ...prev, targetAudience: content.trim() }));
-      responseMessage = 'Perfeito! Processando suas informações para encontrar as melhores opções para seu negócio...';
-      console.log('User data to be sent to backend:', { ...userData, targetAudience: content.trim() });
-    } else {
-      responseMessage = 'Suas informações foram registradas. Em breve apresentaremos as melhores opções para seu negócio.';
+
+      setUserData(updatedUserData);
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: responseMessage,
+        role: 'assistant',
+        timestamp: new Date(),
+      };
+
+      setChatState(prev => ({
+        ...prev,
+        messages: [...prev.messages, assistantMessage],
+        isLoading: false,
+      }));
+    } catch (error) {
+      console.error('Error processing message:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: 'Desculpe, ocorreu um erro ao processar sua solicitação. Por favor, tente novamente.',
+        role: 'assistant',
+        timestamp: new Date(),
+      };
+
+      setChatState(prev => ({
+        ...prev,
+        messages: [...prev.messages, errorMessage],
+        isLoading: false,
+      }));
     }
-
-    const assistantMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      content: responseMessage,
-      role: 'assistant',
-      timestamp: new Date(),
-    };
-
-    setChatState(prev => ({
-      ...prev,
-      messages: [...prev.messages, assistantMessage],
-      isLoading: false,
-    }));
   };
 
   return (
